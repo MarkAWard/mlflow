@@ -8,11 +8,24 @@ import os
 import time
 from six import iteritems
 
+from mlflow.entities import Param, Metric, RunStatus, RunTag, ViewType, SourceType
+from mlflow.signals import (create_experiment_signal,
+                            create_run_signal,
+                            delete_experiment_signal,
+                            delete_run_signal,
+                            log_artifact_signal,
+                            log_artifacts_signal,
+                            log_metric_signal,
+                            log_param_signal,
+                            rename_experiment_signal,
+                            restore_experiment_signal,
+                            restore_run_signal,
+                            set_tag_signal,
+                            set_terminated_signal)
+from mlflow.store.artifact_repo import ArtifactRepository
+from mlflow.tracking.utils import _get_store
 from mlflow.utils.validation import _validate_metric_name, _validate_param_name, \
                                     _validate_tag_name, _validate_run_id
-from mlflow.entities import Param, Metric, RunStatus, RunTag, ViewType, SourceType
-from mlflow.tracking.utils import _get_store
-from mlflow.store.artifact_repo import ArtifactRepository
 
 _DEFAULT_USER_ID = "unknown"
 
@@ -36,6 +49,7 @@ class MlflowClient(object):
         _validate_run_id(run_id)
         return self.store.get_run(run_id)
 
+    @create_run_signal
     def create_run(self, experiment_id, user_id=None, run_name=None, source_type=None,
                    source_name=None, entry_point_name=None, start_time=None,
                    source_version=None, tags=None, parent_run_id=None):
@@ -88,6 +102,7 @@ class MlflowClient(object):
         """
         return self.store.get_experiment_by_name(name)
 
+    @create_experiment_signal
     def create_experiment(self, name, artifact_location=None):
         """Create an experiment.
 
@@ -101,6 +116,7 @@ class MlflowClient(object):
             artifact_location=artifact_location,
         )
 
+    @delete_experiment_signal
     def delete_experiment(self, experiment_id):
         """
         Delete an experiment from the backend store.
@@ -109,6 +125,7 @@ class MlflowClient(object):
         """
         self.store.delete_experiment(experiment_id)
 
+    @restore_experiment_signal
     def restore_experiment(self, experiment_id):
         """
         Restore a deleted experiment unless permanently deleted.
@@ -117,6 +134,7 @@ class MlflowClient(object):
         """
         self.store.restore_experiment(experiment_id)
 
+    @rename_experiment_signal
     def rename_experiment(self, experiment_id, new_name):
         """
         Update an experiment's name. The new name must be unique.
@@ -125,6 +143,7 @@ class MlflowClient(object):
         """
         self.store.rename_experiment(experiment_id, new_name)
 
+    @log_metric_signal
     def log_metric(self, run_id, key, value, timestamp=None):
         """
         Log a metric against the run ID. If timestamp is not provided, uses
@@ -135,6 +154,7 @@ class MlflowClient(object):
         metric = Metric(key, value, timestamp)
         self.store.log_metric(run_id, metric)
 
+    @log_param_signal
     def log_param(self, run_id, key, value):
         """
         Log a parameter against the run ID. Value is converted to a string.
@@ -143,6 +163,7 @@ class MlflowClient(object):
         param = Param(key, str(value))
         self.store.log_param(run_id, param)
 
+    @set_tag_signal
     def set_tag(self, run_id, key, value):
         """
         Set a tag on the run ID. Value is converted to a string.
@@ -151,6 +172,7 @@ class MlflowClient(object):
         tag = RunTag(key, str(value))
         self.store.set_tag(run_id, tag)
 
+    @log_artifact_signal
     def log_artifact(self, run_id, local_path, artifact_path=None):
         """
         Write a local file to the remote ``artifact_uri``.
@@ -162,6 +184,7 @@ class MlflowClient(object):
         artifact_repo = ArtifactRepository.from_artifact_uri(run.info.artifact_uri, self.store)
         artifact_repo.log_artifact(local_path, artifact_path)
 
+    @log_artifacts_signal
     def log_artifacts(self, run_id, local_dir, artifact_path=None):
         """
         Write a directory of files to the remote ``artifact_uri``.
@@ -201,6 +224,7 @@ class MlflowClient(object):
         artifact_repo = ArtifactRepository.from_artifact_uri(artifact_root, self.store)
         return artifact_repo.download_artifacts(path)
 
+    @set_terminated_signal
     def set_terminated(self, run_id, status=None, end_time=None):
         """Set a run's status to terminated.
 
@@ -212,12 +236,14 @@ class MlflowClient(object):
         self.store.update_run_info(run_id, run_status=RunStatus.from_string(status),
                                    end_time=end_time)
 
+    @delete_run_signal
     def delete_run(self, run_id):
         """
         Deletes a run with the given ID.
         """
         self.store.delete_run(run_id)
 
+    @restore_run_signal
     def restore_run(self, run_id):
         """
         Restores a deleted run with the given ID.
