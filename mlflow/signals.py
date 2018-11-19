@@ -5,9 +5,10 @@ from blinker import NamedSignal
 
 class Signal(NamedSignal):
 
-    def __init__(self, name, providing_args, doc=None):
-        self.providing_args = providing_args
+    def __init__(self, name, providing_args, return_val_key=None, doc=None):
         self.signal_name = name
+        self.providing_args = providing_args
+        self.return_val_key = return_val_key
         super(Signal, self).__init__(name, doc)
 
     def __call__(self, func):
@@ -15,6 +16,8 @@ class Signal(NamedSignal):
         def wrapped(*args, **kwargs):
             ret = func(*args, **kwargs)
             func_args = self._get_providing_args(*args, **kwargs)
+            if self.return_val_key is not None:
+                func_args[self.return_val_key] = ret
             self.send(self.signal_name, **func_args)
             return ret
         return wrapped
@@ -24,14 +27,15 @@ class Signal(NamedSignal):
         func_args = {}
         for arg, name in zip(pos_args, self.providing_args):
             func_args[name] = arg
-        func_args.update(kwargs)
-        print func_args
+        func_args.update({k: v for k, v in kwargs.items()
+            if k in self.providing_args})
         return func_args
 
 # - Experiment
 create_experiment_signal = Signal(
     name='create-experiment',
-    providing_args=('name', 'artifact_location'),
+    providing_args=('name', 'artifact_location', 'experiment_id'),
+    return_val_key='experiment_id',
     doc="Post run signal for MlflowClient.create_experiment")
 
 delete_experiment_signal = Signal(
@@ -54,7 +58,8 @@ create_run_signal = Signal(
     name='create-run',
     providing_args=('experiment_id', 'user_id', 'run_name', 'source_type',
                    'source_name', 'entry_point_name', 'start_time',
-                   'source_version', 'tags', 'parent_run_id'),
+                   'source_version', 'tags', 'parent_run_id', 'run_id'),
+    return_val_key='run_id',
     doc="Post run signal for MlflowClient.create_run")
 
 set_terminated_signal = Signal(
